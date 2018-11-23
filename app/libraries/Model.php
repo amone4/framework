@@ -3,81 +3,18 @@
 defined('_INDEX_EXEC') or die('Restricted access');
 
 abstract class Model {
-	private static $dbh = null;
-	private static $stmt = null;
-
+	protected $database;
 	protected $tableName;
 	protected $primaryKey;
 
-	private static function init() {
-		// set DSN
-		$dsn = 'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME;
-		$options = array(
-			PDO::ATTR_PERSISTENT => true,
-			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
-		);
-
-		// create PDO instance
-		try {
-			self::$dbh = new PDO($dsn, DB_USER, DB_PASS, $options);
-		} catch (PDOException $e) {
-			die($e->getMessage());
-		}
-	}
-
 	public function __construct() {
-		if (self::$dbh === null)
-			self::init();
-	}
-
-	// prepare statement with query
-	protected function query($sql) {
-		self::$stmt = self::$dbh->prepare($sql);
-	}
-
-	// bind values
-	protected function bind($param, $value, $type = null) {
-		if (is_null($type)) {
-			if (is_int($value)) {
-				$type = PDO::PARAM_INT;
-			} elseif (is_bool($value)) {
-				$type = PDO::PARAM_BOOL;
-			} elseif (is_null($value)) {
-				$type = PDO::PARAM_NULL;
-			} else {
-				$type = PDO::PARAM_STR;
-			}
-		}
-
-		self::$stmt->bindValue($param, $value, $type);
-	}
-
-	// execute the prepared statement
-	protected function execute() {
-		return self::$stmt->execute();
-	}
-
-	// get result set as array of objects
-	protected function resultSet() {
-		self::execute();
-		return self::$stmt->fetchAll(PDO::FETCH_OBJ);
-	}
-
-	// get single record as object
-	protected function single() {
-		self::execute();
-		return self::$stmt->fetch(PDO::FETCH_OBJ);
-	}
-
-	// get row count
-	public function rowCount() {
-		return self::$stmt->rowCount();
+		$this->database = new Database();
 	}
 
 	// function to get the primary key name of the table
 	private function getPrimaryKey() {
-		$this->query('SHOW KEYS FROM ' . $this->tableName . ' WHERE Key_name = \'PRIMARY\'');
-		$row = $this->single();
+		$this->database->query('SHOW KEYS FROM ' . $this->tableName . ' WHERE Key_name = \'PRIMARY\'');
+		$row = $this->database->single();
 		return $row->Column_name;
 	}
 
@@ -97,12 +34,12 @@ abstract class Model {
 		$query1 = chop($query1, ', ');
 		$query2 = chop($query2, ', ');
 
-		$this->query($query1 . $query2 . $query3);
+		$this->database->query($query1 . $query2 . $query3);
 
 		foreach ($data as $key => $value)
-			$this->bind($key, $value);
+			$this->database->bind($key, $value);
 
-		return $this->execute();
+		return $this->database->execute();
 	}
 
 	// function to find a record using the primary key
@@ -116,9 +53,9 @@ abstract class Model {
 
 		$query = 'SELECT * FROM ' . $this->tableName;
 		$query .= ' WHERE ' . $this->primaryKey . ' = :id';
-		$this->query($query);
-		$this->bind('id', $id);
-		return $this->single();
+		$this->database->query($query);
+		$this->database->bind('id', $id);
+		return $this->database->single();
 	}
 
 	// function to find records using (key => value) pairs
@@ -135,15 +72,15 @@ abstract class Model {
 			$query = chop($query, ' AND ');
 		}
 
-		$this->query($query);
+		$this->database->query($query);
 
 		if ($clause != null)
 			foreach ($clause as $key => $value)
-				$this->bind($key, $value);
+				$this->database->bind($key, $value);
 
-		$set = $this->resultSet();
-		if ($this->rowCount() > 1 || $convertToArray) return $set;
-		else if ($this->rowCount() === 1) return $set[0];
+		$set = $this->database->resultSet();
+		if ($this->database->rowCount() > 1 || $convertToArray) return $set;
+		else if ($this->database->rowCount() === 1) return $set[0];
 		else return null;
 	}
 
@@ -163,13 +100,13 @@ abstract class Model {
 
 		$query .= ' WHERE ' . $this->primaryKey . ' = :' . $this->primaryKey;
 
-		$this->query($query);
+		$this->database->query($query);
 
 		foreach ($data as $key => $value)
-			$this->bind($key, $value);
-		$this->bind($this->primaryKey, $id);
+			$this->database->bind($key, $value);
+		$this->database->bind($this->primaryKey, $id);
 
-		return $this->execute();
+		return $this->database->execute();
 	}
 
 	// function to update records using (key => value) pairs
@@ -190,16 +127,16 @@ abstract class Model {
 			$query = chop($query, ' AND ');
 		}
 
-		$this->query($query);
+		$this->database->query($query);
 
 		foreach ($data as $key => $value)
-			$this->bind($key . '1', $value);
+			$this->database->bind($key . '1', $value);
 
 		if ($clause != null)
 			foreach ($clause as $key => $value)
-				$this->bind($key . '2', $value);
+				$this->database->bind($key . '2', $value);
 
-		return $this->execute();
+		return $this->database->execute();
 	}
 
 	// function to delete a record using the primary key
@@ -211,9 +148,9 @@ abstract class Model {
 
 		$query = 'DELETE FROM ' . $this->tableName;
 		if ($id != null) $query .= ' WHERE ' . $this->primaryKey . ' = :id';
-		$this->query($query);
-		if ($id != null) $this->bind('id', $id);
-		return $this->execute();
+		$this->database->query($query);
+		if ($id != null) $this->database->bind('id', $id);
+		return $this->database->execute();
 	}
 
 	// function to delete records using (key => value) pairs
@@ -230,12 +167,12 @@ abstract class Model {
 			$query = chop($query, ' AND ');
 		}
 
-		$this->query($query);
+		$this->database->query($query);
 
 		if ($clause != null)
 			foreach ($clause as $key => $value)
-				$this->bind($key, $value);
+				$this->database->bind($key, $value);
 
-		return $this->execute();
+		return $this->database->execute();
 	}
 }

@@ -4,21 +4,24 @@ defined('_INDEX_EXEC') or die('Restricted access');
 
 class App {
 	private static $controllers = [];
+	private static $models = [];
 	public static $controller;
 
 	private static function getAllControllers() {
 		foreach (new DirectoryIterator(APP_ROOT . '/controllers') as $fileInfo)
 			if (!$fileInfo->isDot())
-				self::$controllers[ucwords(chop($fileInfo->getFilename()), '.php')] = null;
+				self::$controllers[ucwords($fileInfo->getFilename())] = null;
+	}
+
+	private static function getAllModels() {
+		foreach (new DirectoryIterator(APP_ROOT . '/models') as $fileInfo)
+			if (!$fileInfo->isDot())
+				self::$models[ucwords(chop($fileInfo->getFilename()), '.php')] = null;
 	}
 
 	public static function start() {
-		for ($i = 0; $i < 24; $i++)
-			for ($j = 0; $j < 60; $j++)
-//				if (!Validations::time($i . ':' . $j))
-					echo $i . ':' . $j . '=>' . Validations::time($i . ':' . $j) . '<br>';
-		die();
 		self::getAllControllers();
+		self::getAllModels();
 		list(self::$controller, $method, $params) = Request::processRequest();
 		Session::init();
 		self::dispatch($method, $params);
@@ -36,8 +39,8 @@ class App {
 		$controller = ucwords(self::$controller);
 		if (key_exists($controller, self::$controllers)) {
 			require_once $controllerDirectory . '/' . $controller . '.php';
-			$controller = new $controller();
 			if (method_exists($controller, $method)) {
+				$controller = new $controller();
 				if (!is_callable([$controller, $method])) Response::fatal();
 				else call_user_func_array([$controller, $method], $params);
 			} else {
@@ -45,7 +48,7 @@ class App {
 				if (file_exists($controllerDirectory . '/methods/' . $method . '.php')) {
 					require_once $controllerDirectory . '/methods/' . $method . '.php';
 					try {
-						$reflect = new ReflectionClass($method);
+						$reflect = new ReflectionClass(ucwords(self::$controller) . '\\' . $method);
 						$reflect->newInstanceArgs($params);
 					} catch (ReflectionException $e) {
 						Response::fatal();
@@ -56,7 +59,8 @@ class App {
 	}
 
 	public static function getModel($model) {
-		if (file_exists(APP_ROOT . '/models/' . $model . '.php')) {
+		$model = ucwords($model);
+		if (key_exists($model, self::$models)) {
 			require_once APP_ROOT . '/models/' . $model . '.php';
 			return new $model();
 		} else Response::fatal('Model doesn\'t exist');
